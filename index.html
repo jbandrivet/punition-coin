@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Punition</title>
+  <style>
+    body {
+      background: #c0c0c0;
+      font-family: "MS Sans Serif","Tahoma",sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+      margin: 0;
+      color: #000;
+    }
+    h1 {
+      background: #000080;
+      color: #fff;
+      padding: 6px 10px;
+      font-size: 18px;
+      margin: 0 0 10px 0;
+      width: 100%;
+      max-width: 720px;
+      text-align: left;
+    }
+    .explanation {
+      background: #e0e0e0;
+      border: 2px solid #fff;
+      border-right-color: #808080;
+      border-bottom-color: #808080;
+      padding: 10px;
+      margin-bottom: 18px;
+      width: 100%;
+      max-width: 720px;
+      font-size: 14px;
+    }
+    .controls {
+      background: #f0f0f0;
+      border: 2px solid #fff;
+      border-right-color: #808080;
+      border-bottom-color: #808080;
+      padding: 12px;
+      width: 100%;
+      max-width: 720px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    label { font-size: 13px; margin-bottom: 4px; display:block; }
+    input[type="text"] {
+      padding: 6px;
+      border: 2px solid #fff;
+      border-right-color: #808080;
+      border-bottom-color: #808080;
+      background: #cfcfcf;
+      font-family: inherit;
+      font-size: 14px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .row { display:flex; gap:10px; align-items:center; }
+    .small { width: 160px; }
+    .btn {
+      background: #c0c0c0;
+      border: 2px solid #fff;
+      border-right-color: #808080;
+      border-bottom-color: #808080;
+      padding: 6px 12px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .btn:active {
+      border: 2px solid #808080;
+      border-right-color: #fff;
+      border-bottom-color: #fff;
+    }
+    .status { font-size: 14px; margin-top: 6px; }
+    .timer { font-size: 36px; margin: 12px 0; text-align:center; }
+    #resultBox { display:none; margin-top:10px; border-top:1px solid #808080; padding-top:8px; }
+    .note { font-size:12px; color:#333; margin-top:6px; }
+    .savedNumber { font-weight:bold; }
+    .error { color: #b00000; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h1>Punition au coin - Programme d’entraînement</h1>
+
+  <div class="explanation">
+    <p>📌 <strong>À quoi ça sert :</strong><br>
+    Ce programme simule un temps de concentration (punition « au coin »). Il mesure une durée aléatoire (2–10 minutes) et envoie le résultat par WhatsApp au numéro français saisi.</p>
+
+    <p>⚙️ <strong>Comment ça fonctionne :</strong><br>
+    • Entrez un numéro de téléphone français puis cliquez <em>Enregistrer le numéro</em>.<br>
+    • Cliquez sur <em>Commencer</em> : une durée secrète démarre.<br>
+    • L’écran affiche <code>??:??</code> jusqu’à la fin.<br>
+    • Quand le temps est fini : 5 ding métalliques.<br>
+    • Choisissez <em>Réussi</em> ou <em>Échoué</em>, puis le résultat est envoyé sur WhatsApp.</p>
+  </div>
+
+  <div class="controls">
+    <div>
+      <label for="phoneInput">Numéro français (ex. 07XXXXXXXX ou +337XXXXXXXX)</label>
+      <input id="phoneInput" type="text" placeholder="07XXXXXXXX ou +337XXXXXXXX"/>
+      <div class="row">
+        <button id="saveBtn" class="btn small" onclick="saveNumber()">Enregistrer le numéro</button>
+        <div id="savedDisplay" style="margin-left:6px;">Aucun numéro enregistré</div>
+      </div>
+      <div id="phoneError" class="error"></div>
+      <div class="note">Seuls les numéros français (commençant par 0 ou +33) sont acceptés.</div>
+    </div>
+
+    <div style="border-top:1px solid #d0d0d0; padding-top:8px;">
+      <div class="row" style="justify-content:space-between; align-items:center;">
+        <div>
+          <div class="status" id="status">Prêt à commencer...</div>
+          <div class="timer" id="timerDisplay">--:--</div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:8px; align-items:flex-end;">
+          <button id="startBtn" class="btn" onclick="startPunishment()" disabled>Commencer</button>
+          <button id="stopBtn" class="btn" onclick="stopPunishment()" style="display:none;">Arrêter</button>
+        </div>
+      </div>
+
+      <div id="resultBox">
+        <p>Résultat de la punition :</p>
+        <div class="row">
+          <button class="btn" onclick="sendResult(true)">✅ Réussi</button>
+          <button class="btn" onclick="sendResult(false)">❌ Échoué</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  let timeLeft, totalTime, timerId, isRunning = false;
+  let startTime, endTime;
+  let audioContext;
+  let waNumber = null; // numéro pour wa.me (sans +)
+
+  const phoneInput = document.getElementById('phoneInput');
+  const phoneError = document.getElementById('phoneError');
+  const savedDisplay = document.getElementById('savedDisplay');
+  const startBtn = document.getElementById('startBtn');
+  const stopBtn = document.getElementById('stopBtn');
+
+  function normalizeFrenchNumber(input) {
+    if (!input) return null;
+    let s = input.trim().replace(/[\s\-().]/g, '');
+    // Format +33
+    if (s.startsWith('+33')) {
+      const rest = s.slice(3);
+      if (/^[1-9]\d{8}$/.test(rest)) return '33' + rest;
+      return null;
+    }
+    // Format 0X (national)
+    if (/^0[1-9]\d{8}$/.test(s)) {
+      return '33' + s.slice(1);
+    }
+    return null;
+  }
+
+  function saveNumber() {
+    phoneError.textContent = '';
+    const norm = normalizeFrenchNumber(phoneInput.value);
+    if (!norm) {
+      phoneError.textContent = 'Numéro invalide — entrez un numéro français valide.';
+      waNumber = null;
+      savedDisplay.textContent = 'Aucun numéro enregistré';
+      startBtn.disabled = true;
+      return;
+    }
+    waNumber = norm;
+    savedDisplay.innerHTML = 'Numéro enregistré : <span class="savedNumber">+'
+      + waNumber + '</span>';
+    startBtn.disabled = false;
+  }
+
+  function startPunishment() {
+    if (isRunning || !waNumber) return;
+    const minutes = Math.floor(Math.random() * 9) + 2; // 2 à 10
+    totalTime = minutes * 60;
+    timeLeft = totalTime;
+    isRunning = true;
+    startTime = new Date();
+
+    if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+    document.getElementById('status').textContent = '⚠️ Punition en cours...';
+    startBtn.style.display = 'none';
+    stopBtn.style.display = 'inline-block';
+    updateTimerDisplay();
+
+    timerId = setInterval(() => {
+      timeLeft--;
+      updateTimerDisplay();
+      if (timeLeft <= 0) finishPunishment();
+    }, 1000);
+  }
+
+  function updateTimerDisplay() {
+    document.getElementById('timerDisplay').textContent = '??:??';
+  }
+
+  function finishPunishment() {
+    clearInterval(timerId);
+    isRunning = false;
+    endTime = new Date();
+
+    document.getElementById('status').textContent = '✅ Punition terminée !';
+    stopBtn.style.display = 'none';
+    startBtn.style.display = 'inline-block';
+    document.getElementById('timerDisplay').textContent = '00:00';
+
+    playMetallicDings(5);
+    document.getElementById('resultBox').style.display = 'block';
+  }
+
+  function stopPunishment() {
+    clearInterval(timerId);
+    isRunning = false;
+    document.getElementById('status').textContent = '❌ Punition annulée';
+    document.getElementById('timerDisplay').textContent = '--:--';
+    stopBtn.style.display = 'none';
+    startBtn.style.display = 'inline-block';
+    document.getElementById('resultBox').style.display = 'none';
+  }
+
+  function formatTime(d) {
+    return d.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
+  }
+
+  function sendResult(success) {
+    if (!waNumber) {
+      phoneError.textContent = 'Numéro manquant — impossible d’envoyer le message.';
+      return;
+    }
+    const durationMin = Math.round(totalTime / 60);
+    const resultText = success ? 'Réussi ✅' : 'Échoué ❌';
+    const msg = `Punition terminée !\nHeure de début : ${formatTime(startTime)}\nHeure de fin : ${formatTime(endTime)}\nDurée : ${durationMin} minutes\nRésultat : ${resultText}`;
+    const url = `https://wa.me/${waNumber}?text=${encodeURIComponent(msg)}`;
+    window.open(url, '_blank');
+  }
+
+  function playMetallicDings(count) {
+    if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    for (let i = 0; i < count; i++) {
+      setTimeout(() => {
+        const now = audioContext.currentTime;
+        const osc = audioContext.createOscillator();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(440, now);
+        const gain = audioContext.createGain();
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+        osc.connect(gain);
+        gain.connect(audioContext.destination);
+        osc.start(now);
+        osc.stop(now + 0.6);
+      }, i * 600);
+    }
+  }
+
+  document.addEventListener('click', function initAudio() {
+    if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    document.removeEventListener('click', initAudio);
+  });
+
+  phoneInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') saveNumber();
+  });
+</script>
+</body>
+</html>
+
