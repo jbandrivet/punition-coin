@@ -82,10 +82,25 @@
     .note { font-size:12px; color:#333; margin-top:6px; }
     .savedNumber { font-weight:bold; }
     .error { color: #b00000; font-size: 13px; }
+    .wakelock-status {
+      font-size: 12px;
+      color: #006600;
+      margin-top: 4px;
+      display: none;
+    }
+    .wakelock-status.active {
+      display: block;
+    }
+    .footer {
+      margin-top: 20px;
+      font-size: 11px;
+      color: #666;
+      text-align: center;
+    }
   </style>
 </head>
 <body>
-  <h1>Punition au coin - Programme d’entraînement</h1>
+  <h1>Punition au coin - Programme d'entraînement</h1>
 
   <div class="explanation">
     <p>📌 <strong>À quoi ça sert :</strong><br>
@@ -94,9 +109,10 @@
     <p>⚙️ <strong>Comment ça fonctionne :</strong><br>
     • Entrez un numéro de téléphone français puis cliquez <em>Enregistrer le numéro</em>.<br>
     • Cliquez sur <em>Commencer</em> : une durée secrète démarre.<br>
-    • L’écran affiche <code>??:??</code> jusqu’à la fin.<br>
+    • L'écran affiche <code>??:??</code> jusqu'à la fin.<br>
     • Quand le temps est fini : 5 ding métalliques.<br>
-    • Choisissez <em>Réussi</em> ou <em>Échoué</em>, puis le résultat est envoyé sur WhatsApp.</p>
+    • Choisissez <em>Réussi</em> ou <em>Échoué</em>, puis le résultat est envoyé sur WhatsApp.<br>
+    • 🔒 L'écran reste actif pendant toute la punition (anti-veille automatique).</p>
   </div>
 
   <div class="controls">
@@ -115,6 +131,7 @@
       <div class="row" style="justify-content:space-between; align-items:center;">
         <div>
           <div class="status" id="status">Prêt à commencer...</div>
+          <div class="wakelock-status" id="wakelockStatus">🔒 Écran maintenu actif</div>
           <div class="timer" id="timerDisplay">--:--</div>
         </div>
         <div style="display:flex; flex-direction:column; gap:8px; align-items:flex-end;">
@@ -133,17 +150,23 @@
     </div>
   </div>
 
+  <div class="footer">
+    Punition Trainer v1.1 — 🔒 Anti-veille intégré
+  </div>
+
 <script>
   let timeLeft, totalTime, timerId, isRunning = false;
   let startTime, endTime;
   let audioContext;
-  let waNumber = null; // numéro pour wa.me (sans +)
+  let waNumber = null;
+  let wakeLock = null;
 
   const phoneInput = document.getElementById('phoneInput');
   const phoneError = document.getElementById('phoneError');
   const savedDisplay = document.getElementById('savedDisplay');
   const startBtn = document.getElementById('startBtn');
   const stopBtn = document.getElementById('stopBtn');
+  const wakelockStatus = document.getElementById('wakelockStatus');
 
   function normalizeFrenchNumber(input) {
     if (!input) return null;
@@ -177,7 +200,31 @@
     startBtn.disabled = false;
   }
 
-  function startPunishment() {
+  async function requestWakeLock() {
+    try {
+      if ('wakeLock' in navigator) {
+        wakeLock = await navigator.wakeLock.request('screen');
+        wakeLock.addEventListener('release', () => {
+          console.log('Wake Lock released');
+        });
+        wakelockStatus.classList.add('active');
+      } else {
+        console.warn('Wake Lock API not supported');
+      }
+    } catch (err) {
+      console.error('Wake Lock error:', err);
+    }
+  }
+
+  function releaseWakeLock() {
+    if (wakeLock) {
+      wakeLock.release();
+      wakeLock = null;
+      wakelockStatus.classList.remove('active');
+    }
+  }
+
+  async function startPunishment() {
     if (isRunning || !waNumber) return;
     const minutes = Math.floor(Math.random() * 9) + 2; // 2 à 10
     totalTime = minutes * 60;
@@ -186,6 +233,8 @@
     startTime = new Date();
 
     if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+    await requestWakeLock();
 
     document.getElementById('status').textContent = '⚠️ Punition en cours...';
     startBtn.style.display = 'none';
@@ -208,6 +257,8 @@
     isRunning = false;
     endTime = new Date();
 
+    releaseWakeLock();
+
     document.getElementById('status').textContent = '✅ Punition terminée !';
     stopBtn.style.display = 'none';
     startBtn.style.display = 'inline-block';
@@ -220,6 +271,7 @@
   function stopPunishment() {
     clearInterval(timerId);
     isRunning = false;
+    releaseWakeLock();
     document.getElementById('status').textContent = '❌ Punition annulée';
     document.getElementById('timerDisplay').textContent = '--:--';
     stopBtn.style.display = 'none';
@@ -233,7 +285,7 @@
 
   function sendResult(success) {
     if (!waNumber) {
-      phoneError.textContent = 'Numéro manquant — impossible d’envoyer le message.';
+      phoneError.textContent = 'Numéro manquant — impossible d'envoyer le message.';
       return;
     }
     const durationMin = Math.round(totalTime / 60);
@@ -267,10 +319,16 @@
     document.removeEventListener('click', initAudio);
   });
 
+  // Réactiver le Wake Lock si l'utilisateur revient sur la page
+  document.addEventListener('visibilitychange', async () => {
+    if (wakeLock !== null && document.visibilityState === 'visible' && isRunning) {
+      await requestWakeLock();
+    }
+  });
+
   phoneInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') saveNumber();
   });
 </script>
 </body>
 </html>
-
