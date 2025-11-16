@@ -100,7 +100,7 @@
   </style>
 </head>
 <body>
-  <h1>Punition au coin - Programme d'entraînement</h1>
+  <h1>Punition au coin - Programme d entraînement</h1>
 
   <div class="explanation">
     <p>📌 <strong>À quoi ça sert :</strong><br>
@@ -120,7 +120,7 @@
       <label for="phoneInput">Numéro français (ex. 07XXXXXXXX ou +337XXXXXXXX)</label>
       <input id="phoneInput" type="text" placeholder="07XXXXXXXX ou +337XXXXXXXX"/>
       <div class="row">
-        <button id="saveBtn" class="btn small" onclick="saveNumber()">Enregistrer le numéro</button>
+        <button id="saveBtn" class="btn small">Enregistrer le numéro</button>
         <div id="savedDisplay" style="margin-left:6px;">Aucun numéro enregistré</div>
       </div>
       <div id="phoneError" class="error"></div>
@@ -135,16 +135,16 @@
           <div class="timer" id="timerDisplay">--:--</div>
         </div>
         <div style="display:flex; flex-direction:column; gap:8px; align-items:flex-end;">
-          <button id="startBtn" class="btn" onclick="startPunishment()" disabled>Commencer</button>
-          <button id="stopBtn" class="btn" onclick="stopPunishment()" style="display:none;">Arrêter</button>
+          <button id="startBtn" class="btn" disabled>Commencer</button>
+          <button id="stopBtn" class="btn" style="display:none;">Arrêter</button>
         </div>
       </div>
 
       <div id="resultBox">
         <p>Résultat de la punition :</p>
         <div class="row">
-          <button class="btn" onclick="sendResult(true)">✅ Réussi</button>
-          <button class="btn" onclick="sendResult(false)">❌ Échoué</button>
+          <button class="btn" id="btnSuccess">✅ Réussi</button>
+          <button class="btn" id="btnFailed">❌ Échoué</button>
         </div>
       </div>
     </div>
@@ -167,17 +167,18 @@
   const startBtn = document.getElementById('startBtn');
   const stopBtn = document.getElementById('stopBtn');
   const wakelockStatus = document.getElementById('wakelockStatus');
+  const btnSuccess = document.getElementById('btnSuccess');
+  const btnFailed = document.getElementById('btnFailed');
+  const saveBtn = document.getElementById('saveBtn');
 
   function normalizeFrenchNumber(input) {
     if (!input) return null;
     let s = input.trim().replace(/[\s\-().]/g, '');
-    // Format +33
     if (s.startsWith('+33')) {
       const rest = s.slice(3);
       if (/^[1-9]\d{8}$/.test(rest)) return '33' + rest;
       return null;
     }
-    // Format 0X (national)
     if (/^0[1-9]\d{8}$/.test(s)) {
       return '33' + s.slice(1);
     }
@@ -195,8 +196,7 @@
       return;
     }
     waNumber = norm;
-    savedDisplay.innerHTML = 'Numéro enregistré : <span class="savedNumber">+'
-      + waNumber + '</span>';
+    savedDisplay.innerHTML = 'Numéro enregistré : <span class="savedNumber">+' + waNumber + '</span>';
     startBtn.disabled = false;
   }
 
@@ -204,7 +204,7 @@
     try {
       if ('wakeLock' in navigator) {
         wakeLock = await navigator.wakeLock.request('screen');
-        wakeLock.addEventListener('release', () => {
+        wakeLock.addEventListener('release', function() {
           console.log('Wake Lock released');
         });
         wakelockStatus.classList.add('active');
@@ -226,7 +226,7 @@
 
   async function startPunishment() {
     if (isRunning || !waNumber) return;
-    const minutes = Math.floor(Math.random() * 9) + 2; // 2 à 10
+    const minutes = Math.floor(Math.random() * 9) + 2;
     totalTime = minutes * 60;
     timeLeft = totalTime;
     isRunning = true;
@@ -241,7 +241,7 @@
     stopBtn.style.display = 'inline-block';
     updateTimerDisplay();
 
-    timerId = setInterval(() => {
+    timerId = setInterval(function() {
       timeLeft--;
       updateTimerDisplay();
       if (timeLeft <= 0) finishPunishment();
@@ -285,20 +285,20 @@
 
   function sendResult(success) {
     if (!waNumber) {
-      phoneError.textContent = 'Numéro manquant — impossible d'envoyer le message.';
+      phoneError.textContent = 'Numéro manquant — impossible d envoyer le message.';
       return;
     }
     const durationMin = Math.round(totalTime / 60);
     const resultText = success ? 'Réussi ✅' : 'Échoué ❌';
-    const msg = `Punition terminée !\nHeure de début : ${formatTime(startTime)}\nHeure de fin : ${formatTime(endTime)}\nDurée : ${durationMin} minutes\nRésultat : ${resultText}`;
-    const url = `https://wa.me/${waNumber}?text=${encodeURIComponent(msg)}`;
+    const msg = 'Punition terminée !\nHeure de début : ' + formatTime(startTime) + '\nHeure de fin : ' + formatTime(endTime) + '\nDurée : ' + durationMin + ' minutes\nRésultat : ' + resultText;
+    const url = 'https://wa.me/' + waNumber + '?text=' + encodeURIComponent(msg);
     window.open(url, '_blank');
   }
 
   function playMetallicDings(count) {
     if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
     for (let i = 0; i < count; i++) {
-      setTimeout(() => {
+      setTimeout(function() {
         const now = audioContext.currentTime;
         const osc = audioContext.createOscillator();
         osc.type = 'triangle';
@@ -319,16 +319,21 @@
     document.removeEventListener('click', initAudio);
   });
 
-  // Réactiver le Wake Lock si l'utilisateur revient sur la page
-  document.addEventListener('visibilitychange', async () => {
+  document.addEventListener('visibilitychange', async function() {
     if (wakeLock !== null && document.visibilityState === 'visible' && isRunning) {
       await requestWakeLock();
     }
   });
 
-  phoneInput.addEventListener('keydown', (e) => {
+  phoneInput.addEventListener('keydown', function(e) {
     if (e.key === 'Enter') saveNumber();
   });
+
+  saveBtn.addEventListener('click', saveNumber);
+  startBtn.addEventListener('click', startPunishment);
+  stopBtn.addEventListener('click', stopPunishment);
+  btnSuccess.addEventListener('click', function() { sendResult(true); });
+  btnFailed.addEventListener('click', function() { sendResult(false); });
 </script>
 </body>
 </html>
